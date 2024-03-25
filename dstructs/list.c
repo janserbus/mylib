@@ -5,7 +5,6 @@
 #include <list.h>
 
 //CONSTRUCTOR AND DESTRUCTOR FOR NODE
-
 lnode *create_lnode(void *data, lnode *next)
 {
     lnode *n = malloc(sizeof(lnode));
@@ -67,18 +66,32 @@ lnode *list_get_second_last_node(List list, int *is_second_last)
 }
 
 //Returns pointer to nth node in the list (counted from one).
-//In case place is outsid of rage of list returns NULL.
-lnode *list_get_nth_node(List list, int position)
+//In case place is outsid of rage, returns pointer to last node in the list and sets outrange to 1 else outrage is set to 0.
+//If list is empty retur NULL.
+lnode *list_get_nth_node(List list, int position, int *outrange)
 {
     assert(position > 0);
 
+    if (list_is_empty(list))
+    {
+        *outrange = 1;
+        return NULL;
+    }
+
+    if (position == 1)
+    {
+        *outrange = 0;
+        return list->head;
+    }
+
     lnode *cur = list->head;
 
-    while (cur != NULL)
+    while (cur->next != NULL)
     {
-        if (position == 1)
+        if (position == 2)
         {
-            return cur;
+            *outrange = 0;
+            return cur->next;
         }
 
         position--;
@@ -86,7 +99,8 @@ lnode *list_get_nth_node(List list, int position)
         cur = cur->next;
     }
 
-    return NULL;
+    *outrange = 1;
+    return cur;
 }
 
 
@@ -96,12 +110,14 @@ List list()
 {
     List list = malloc(sizeof(type_list));
     list->head = NULL;
-
+    list->pointer = NULL;
     return list;
 }
 
 void list_(List list, void (*free_data)())
 {
+    assert(list_is_valid);
+
     lnode *temp = NULL;
 
     for (lnode *cur = list->head; cur != NULL; cur = temp)
@@ -119,6 +135,16 @@ void list_(List list, void (*free_data)())
     free(list);
 
     list = NULL;
+}
+
+int list_is_valid(List list)
+{
+    if (list == NULL)
+    {
+        return 0;
+    }
+
+    return  1;
 }
 
 int list_is_empty(List list)
@@ -184,20 +210,40 @@ void list_print(List list, void (*printel)())
 
 void list_add(List list, void *data)
 {
+    assert(list_is_valid(list));
+
     list->head = create_lnode(data, list->head);
+    list->pointer = list->head;
 }
 
 void list_add_at(List list, int position, void *data)
 {
+    assert(list_is_valid(list));
     assert(position > 0);
 
-    lnode *nth = list_get_nth_node(list, position - 1);
+    if (position == 1)
+    {
+        list_add(list, data);
+        return;
+    }
 
-    nth->next = create_lnode(data, nth->next);
+    int outrange;
+    lnode *nth = list_get_nth_node(list, position - 1, &outrange);
+
+    if (nth == NULL)
+    {
+        list_add(list, data);
+    }
+    else
+    {
+        nth->next = create_lnode(data, nth->next);
+    }
 }
 
 void list_add_end(List list, void *data)
 {
+    assert(list_is_valid(list));
+
     if (list_is_empty(list))
     {
         list_add(list, data);
@@ -212,6 +258,8 @@ void list_add_end(List list, void *data)
 
 void *list_get(List list)
 {
+    assert(list_is_valid(list));
+
     if (list_is_empty(list))
     {
         return NULL;
@@ -221,8 +269,11 @@ void *list_get(List list)
 }
 
 void *list_get_nth(List list, int position)
-{    
-    lnode *n = list_get_nth_node(list, position);
+{
+    assert(list_is_valid(list));
+
+    int outrage;
+    lnode *n = list_get_nth_node(list, position, &outrage);
 
     if (n == NULL)
     {
@@ -234,6 +285,8 @@ void *list_get_nth(List list, int position)
 
 void *list_get_last(List list)
 {
+    assert(list_is_valid(list));
+
     lnode *n = list_get_last_node(list);
 
     if (n == NULL)
@@ -246,9 +299,12 @@ void *list_get_last(List list)
 
 int list_remove(List list)
 {
+    assert(list_is_valid(list));
+
     if (!list_is_empty(list))
     {
         list->head = delete_lnode(list->head);
+        list->pointer = list->head;
         
         return 0;
     }
@@ -258,9 +314,11 @@ int list_remove(List list)
 
 int list_remove_at(List list, int position)
 {
+    assert(list_is_valid(list));
     assert(position > 0);
 
-    lnode *prev = list_get_nth_node(list, position - 1);
+    int outrange;
+    lnode *prev = list_get_nth_node(list, position - 1, &outrange);
 
     if (prev == NULL)
     {
@@ -274,6 +332,8 @@ int list_remove_at(List list, int position)
 
 int list_remove_end(List list)
 {    
+    assert(list_is_valid(list));
+
     if (list_is_empty(list))
     {
         return -1;
@@ -291,6 +351,7 @@ int list_remove_end(List list)
     else
     {
         list->head = delete_lnode(list->head);
+        list->pointer = list->head;
     }
 
     return 0;
@@ -318,17 +379,84 @@ int list_remove_end(List list)
 //     return -1;
 // }
 
+void list_sort(List l, int (*comp)())
+{
+    assert(list_is_valid(l));
+
+    if (list_is_empty(l))
+    {
+        return;
+    }
+
+    List sorted = list();
+
+    while (l->head != NULL)
+    {
+        lnode *prev_highest = l->head;
+        int first_heighest = 1;
+        for (lnode *cur = l->head; cur->next != NULL; cur = cur->next)
+        {
+            if (first_heighest)
+            {
+                if ((*comp)(l->head->data, cur->next->data) == -1)
+                {
+                    first_heighest = 0;
+                    prev_highest = cur;
+                }
+
+                continue;
+            }
+
+            if ((*comp)(prev_highest->next->data, cur->next->data) == -1)
+            {
+                prev_highest = cur;
+            }
+        }
+
+        //Remove highest from unsorted list
+        lnode *highest;
+        if (first_heighest) //if last element in the l
+        {
+            highest = l->head;
+            l->head = highest->next;
+        }
+        else
+        {
+            highest = prev_highest->next;
+            prev_highest->next = highest->next;
+        }
+
+        //Put highest into sorted list
+        lnode *temp = sorted->head;
+        sorted->head = highest;
+        highest->next = temp;
+    }
+
+
+    l->head = sorted->head;
+    l->pointer = l->head;
+
+    sorted->head = NULL;
+    list_(sorted, NULL);
+
+}
+
 void list_append(List list1, List list2)
 {
+    assert(list_is_valid(list1) && list_is_valid(list2));
+
     lnode *end = list_get_last_node(list1);
 
     end->next = list2->head;
 
     list2->head = NULL;
+    list2->pointer = NULL;
 }
 
 void list_reverse(List list)
 {
+    assert(list_is_valid(list));
+
     lnode *reversed = NULL;
     lnode *next = NULL;
 
@@ -341,6 +469,22 @@ void list_reverse(List list)
     }
 
     list->head = reversed;
+    list->pointer = reversed;
+}
+
+int list_foreach(List list, void **el)
+{
+    assert(list_is_valid(list));
+
+    if (list->pointer != NULL)
+    {
+        *el = list->pointer->data;
+        list->pointer = list->pointer->next;
+        return 1;
+    }
+
+    list->pointer = list->head;
+    return 0;
 }
 
 //STACK IMPLEMENTATION

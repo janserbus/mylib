@@ -7,6 +7,7 @@ typedef struct lnode{
 
 typedef struct{
     lnode *head;
+    lnode *pointer; //general purpose pointer that is used by some functions, by default it points to the same elment as head, but can be changed
 }type_list;
 
 typedef type_list *List;
@@ -20,11 +21,21 @@ List list();
 //Function pointed to by free_data has to take one argument wich is pointer to the data type being freed. 
 void list_(List list, void (*free_data)());
 int list_length(List list);
+
+//predicates
+int list_is_valid(List list);
 int list_is_empty(List list);
+
 void list_print(List list, void (*printel)());
 
+//Adds data at the begining of a list
 void list_add(List list, void *data);
+
+//Adds data in position'th place in the list, in case list is smaller than position
+//data is added at the end od the list
 void list_add_at(List list, int position, void *data);
+
+//Adds data at the begining of a list
 void list_add_end(List list, void *data);
 
 void *list_get(List list);
@@ -44,6 +55,12 @@ int list_remove_end(List list);
 void list_append(List list1, List list2);
 void list_reverse(List list);
 
+//Sorts the list
+void list_sort(List l, int (*comp)());
+
+//Can be used in while loop to loop through all the list data
+int list_foreach(List list, void **el);
+
 Stack stack();
 void stack_(Stack stack, void (*free_data)());
 int stack_is_empty(Stack stack);
@@ -56,11 +73,4 @@ int queue_is_empty(Queue queue);
 void enqueue(Queue queue, void *data);
 void *dequeue(Queue queue);
 
-
-
-
-
-
-
-
-
+void list_error(const char *msg);

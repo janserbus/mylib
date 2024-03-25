@@ -1,11 +1,13 @@
+#include <math.h>
+#include <string.h>
+#include <stdlib.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-#include <math.h>
+#include <fontconfig/fontconfig.h>
 
 #include <list.h>
 #include <treerend.h>
-
-#define PI 3.14159265358979323846
+#include <tree.h>
 
 //LIBRARY GLOBAL DATA STRUCTURE
 typedef struct{
@@ -15,37 +17,53 @@ typedef struct{
     List snapshots;
     int snapshots_size;
     int snapshot_pointer;
-}TR_Data;
+}TR_Config;
+
+//Structure representig shared portion of every tree data 
+//(meaning regardles of the data type, every data will have this exact structure)
+typedef struct{
+    int data;
+    int x;
+    int y;
+    int parent;
+}TR_SharedData;
 
 typedef struct{
     int data;
     int x;
     int y;
     int parent;
-}TR_TreeData;
+}TR_BstData;
 
+//Shared member is used to do operations that are shared among all the data types
+typedef union{
+    TR_SharedData shared;
+    TR_BstData bst;
+}TR_NodeData;
+
+//Dual structure to TR_Tree representig tree ready to render
 typedef struct{
     char *label;
-    TR_TreeData *data;
-    int data_size;
+    TR_TreeType type;
+    List node_data;
 }TR_Snapshot;
 
 //SNAPSHOT
-TR_Snapshot *TR_CreateSnapshot(Tree tree, char *label);
+TR_Snapshot *TR_CreateSnapshot(TR_Tree *tree, char *label);
 void TR_DestroySnapshot(TR_Snapshot *snap);
+void TR_PrintSnapshot(TR_Snapshot *snap);
 
-//TREE DATA
-TR_TreeData *TR_ConvertToTreeData(Tree tree, int data_size);
-int TR_TreeConvert(node *r, int x, int y, int left_child, TR_TreeData* data);
-void TR_DestroyTreeData(TR_TreeData *data);
-void TR_PrintTreeData(TR_TreeData *data, int size);
-
-void TR_RenderNextSnapshot(SDL_Renderer *rend);
-void TR_RenderPrevSnapshot(SDL_Renderer *rend);
+//NODE DATA
+TR_NodeData *TR_CreateNodeData();
+void TR_DestroyNodeData(TR_NodeData *data);
+void TR_ConvertToNodeData(TR_Tree *tree, List node_data);
+int TR_ConvertNodes(TR_TreeNode *root, TR_TreeType type, int x, int y, int left_child, List data);
 
 //DRAWING
+void TR_RenderNextSnapshot(SDL_Renderer *rend);
+void TR_RenderPrevSnapshot(SDL_Renderer *rend);
 void TR_RenderDrawSnapshot(SDL_Renderer *rend, TR_Snapshot *snap);
-void TR_RenderDrawTreeData(SDL_Renderer *rend, TR_TreeData *data, int size, SDL_Rect rend_area);
+void TR_RenderDrawNodeData(SDL_Renderer *rend, List node_data, SDL_Rect rend_area);
 void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float sclf);
 void TR_RenderDrawConnection(SDL_Renderer *rend, SDL_Point c1, SDL_Point c2, float sclf);
 void TR_RenderDrawCircle(SDL_Renderer *rend, SDL_Point center, int radius);
@@ -56,24 +74,31 @@ SDL_Point Vector(SDL_Point p1, SDL_Point p2);
 SDL_Point VectorMultiply(SDL_Point vec, float fac);
 double VectorAngle(SDL_Point vec);
 
+//FONT LOADING
+char *TR_GetFontPath(char *family);
+
+//ERROR HANDELING
+void TR_ErrorLog(char *function, const char * msg);
 
 //Library global data
-TR_Data Data;
+TR_Config Data;
 
 //Initialization of TreeRend module
 void TR_Init()
 {
-    //initializes libraries
+    char *err_fun_name = "TR_Init";
+
+    //Initialize libraries
     if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS) != 0)
     {
-        perror(SDL_GetError());
-        abort();    
+        TR_ErrorLog(err_fun_name, SDL_GetError());
+        goto exit;
     }
 
-    if(TTF_Init() != 0){
-        perror(TTF_GetError());
-        SDL_Quit();
-        abort();
+    if(TTF_Init() != 0)
+    {
+        TR_ErrorLog(err_fun_name, TTF_GetError());
+        goto destr_SDL;
     }
 
     //sets render scale quality
@@ -84,10 +109,26 @@ void TR_Init()
 
     Data.draw_color = d;
     Data.bg_color = b;
-    Data.font = "/home/jan/Documents/inf23_24/mylib/treerend/Roboto.ttf";
+    Data.font = TR_GetFontPath("Roboto");
     Data.snapshots = list();
+    if (Data.snapshots == NULL)
+    {
+        TR_ErrorLog(err_fun_name, "Unable to initialize list");
+        goto destr_TTF;
+    }
     Data.snapshots_size = 0;
     Data.snapshot_pointer = 1;
+
+    return;
+
+    destr_TTF:
+    TTF_Quit();
+
+    destr_SDL:
+    SDL_Quit();
+
+    exit:
+    exit(EXIT_FAILURE);
 }
 
 void TR_Quit()
@@ -99,28 +140,50 @@ void TR_Quit()
 }
 
 /////////////////////////////////////////////////////////////////////
+///////////              INTERFACE FUNCTIONS
+
+TR_Tree *TR_FormatTree(void *tree, TR_TreeType type)
+{
+    TR_Tree *t = malloc(sizeof(TR_Tree));
+
+    t->type = type;
+    t->root = *((void **) tree);
+
+    return t;
+}
+
+/////////////////////////////////////////////////////////////////////
 ///////////         TREEREND PRESENTING FUNCTIONS
 
-void TR_RenderTree(Tree tree, char *label)
+
+void TR_RenderTree(void *tree, TR_TreeType type, char *label)
 {
+    TR_Tree *formated = TR_FormatTree(tree, type);
+
+    TR_RenderTreeFormated(formated, label);
+
+    free(formated);
+}
+
+void TR_RenderTreeFormated(TR_Tree *tree, char * label)
+{
+    char *err_fun_name = "TR_RenderTreeFormated";
+
     //Setup window and renderer
     SDL_Window *window = SDL_CreateWindow("TreeRend", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, TR_WINDOW_WIDTH, TR_WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
 
     if(!window)
     {
-        perror(SDL_GetError());
-        TR_Quit();
-        abort();
+        TR_ErrorLog(err_fun_name, SDL_GetError());
+        goto exit;
     }
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, 0, SDL_RENDERER_ACCELERATED);
 
     if(!renderer)
     {
-        perror(SDL_GetError());
-        SDL_DestroyWindow(window);
-        TR_Quit();
-        abort();
+        TR_ErrorLog(err_fun_name, SDL_GetError());
+        goto destr_window;
     }
 
     //Prepare renderer
@@ -134,7 +197,6 @@ void TR_RenderTree(Tree tree, char *label)
     TR_Snapshot *snap = TR_CreateSnapshot(tree, label);
 
     //Draw snapshot into renderer
-
     TR_RenderDrawSnapshot(renderer, snap);    
 
     SDL_RenderPresent(renderer);
@@ -156,8 +218,19 @@ void TR_RenderTree(Tree tree, char *label)
         }        
     }
 
+    TR_DestroySnapshot(snap);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+
+    return;
+
+    destr_window:
+    SDL_DestroyWindow(window);
+
+    exit:
+    TR_Quit();
+    exit(EXIT_FAILURE);
+
 }
 
 void TR_Present()
@@ -242,7 +315,7 @@ void TR_RenderNextSnapshot(SDL_Renderer *rend)
     Data.snapshot_pointer++;
 
     //Draw snapshot into renderer
-    TR_RenderDrawSnapshot(rend, snap);    
+    TR_RenderDrawSnapshot(rend, snap);
 
     SDL_RenderPresent(rend);
 }
@@ -274,7 +347,16 @@ void TR_RenderPrevSnapshot(SDL_Renderer *rend)
 /////////////////////////////////////////////////////////////////////
 ///////////         SNAPSHOT FUNCTIONS
 
-void TR_TakeSnapshot(Tree tree, char *label)
+void TR_TakeSnapshot(void *tree, TR_TreeType type, char *label)
+{
+    TR_Tree *formated = TR_FormatTree(tree, type);
+
+    TR_TakeSnapshotFormated(formated, label);
+
+    free(formated);
+}
+
+void TR_TakeSnapshotFormated(TR_Tree *tree, char *label)
 {
     //Create snapshot
     TR_Snapshot *snap = TR_CreateSnapshot(tree, label);
@@ -284,13 +366,13 @@ void TR_TakeSnapshot(Tree tree, char *label)
     Data.snapshots_size++;
 }
 
-TR_Snapshot *TR_CreateSnapshot(Tree tree, char *label)
+TR_Snapshot *TR_CreateSnapshot(TR_Tree *tree, char *label)
 {
     TR_Snapshot *snap = malloc(sizeof(TR_Snapshot));
 
     if(label != NULL)
     {
-        snap->label = malloc(TR_SNAPSHOT_MAX_LABEL_SIZE * sizeof(char));
+        snap->label = malloc((TR_SNAPSHOT_MAX_LABEL_SIZE + 1) * sizeof(char));
 
         strcpy(snap->label, label);
     }
@@ -299,110 +381,139 @@ TR_Snapshot *TR_CreateSnapshot(Tree tree, char *label)
         snap->label = NULL;
     }
 
-    snap->data_size = tree_node_count(tree);
-    snap->data = TR_ConvertToTreeData(tree, snap->data_size);
+    snap->type = tree->type;
+    snap->node_data = list();
+
+    TR_ConvertToNodeData(tree, snap->node_data);
 
     return snap;
 }
 
 void TR_DestroySnapshot(TR_Snapshot *snap)
 {
-    TR_DestroyTreeData(snap->data);
+    list_(snap->node_data, &TR_DestroyNodeData);
+
     if (snap->label != NULL)
     {
         free(snap->label);
     }
+    
     free(snap);
+}
+
+void TR_PrintSnapshot(TR_Snapshot *snap)
+{
+    if (snap->label != NULL)
+    {
+        printf("\n%s\n-------------\n", snap->label);
+    }
+
+    void *el;
+        switch (snap->type)
+        {
+            case TR_TreeTypeBst:
+                int i = 1;
+                while (list_foreach(snap->node_data, &el))
+                {
+                    TR_NodeData *data = (TR_NodeData *) el;
+
+                    printf("element: %i\n", i);
+                    printf("  data: %i\n", data->bst.data);
+                    printf("     x: %i\n", data->bst.x);
+                    printf("     y: %i\n", data->bst.y);
+                    printf("parent: %i\n\n", data->bst.parent);
+                    i++;
+                }
+                break;
+
+            default:
+                printf("Unknown type\n\n");
+                break;
+        }
 }
 
 void TR_PrintSnapshots()
 {
-    for (int i = 1; i <= Data.snapshots_size; i++)
-    {
-        printf("\n\n");
-
-        TR_Snapshot *snap = list_get_nth(Data.snapshots, i);
-        
-        printf("%s\n\n", snap->label);
-
-        TR_PrintTreeData(snap->data, snap->data_size);
-
-    }
-
-    printf("\n\n\n");
+    list_print(Data.snapshots, &TR_PrintSnapshot);
 }
 
 
 /////////////////////////////////////////////////////////////////////
-///////////         TREEDATA FUNCTIONS
+///////////         NODEDATDA FUNCTIONS
 
-TR_TreeData *TR_ConvertToTreeData(Tree tree, int data_size)
+TR_NodeData *TR_CreateNodeData()
 {
-    //allocs array for TR_TreeData
-    TR_TreeData *data = calloc(data_size, sizeof(TR_TreeData));
-
-    TR_TreeConvert(tree->root, 0, 1, -1, data);
-
-    return data;
+    return malloc(sizeof(TR_NodeData));
 }
 
-int TR_TreeConvert(node *r, int x, int y, int left_child, TR_TreeData* data)
-{
-    TR_TreeData d = {0, 0, 0, 0};
-
-    d.data = r->data;
-    d.y = y;
-
-    int most_right = x;
-    int ret = x;
-
-    if (r->left != NULL) 
-    {
-        ret = TR_TreeConvert(r->left, x, y + 1, 1, data);
-    }
-
-    ret += 1;
-
-    d.x = ret;
-
-    if (r->right != NULL)
-    {
-        ret = TR_TreeConvert(r->right, ret, y + 1, 0, data);
-    }
-
-    if (node_is_root(r))
-    {
-        d.parent = -1;
-    }
-    else if(left_child)
-    {
-        d.parent = ret + 1;
-    }
-    else 
-    {
-        d.parent = most_right;
-    }
-
-    data[d.x - 1] = d;
-
-    return ret;    
-}
-
-void TR_DestroyTreeData(TR_TreeData *data)
+void TR_DestroyNodeData(TR_NodeData *data)
 {
     free(data);
 }
 
-void TR_PrintTreeData(TR_TreeData *data, int size)
+int TR_CompNodeData(TR_NodeData *d1, TR_NodeData *d2)
 {
-    for (int  i = 0; i < size; i++)
+    if (d1->shared.x > d2->shared.x)
     {
-        printf("element: %i\n", i);
-        printf("  data: %i\n", data[i].data);
-        printf("     x: %i\n", data[i].x);
-        printf("     y: %i\n", data[i].y);
-        printf("parent: %i\n\n", data[i].parent);
+        return 1;
     }
+    else if(d1->shared.x < d2->shared.x)
+    {
+        return -1;
+    }
+    
+    return 0;
+}
+
+void TR_ConvertToNodeData(TR_Tree *tree, List node_data)
+{
+    TR_ConvertNodes(tree->root, tree->type, 0, 0, -1, node_data);
+
+    list_sort(node_data, &TR_CompNodeData);
+}
+
+//y is y coordinate of curent node
+//returns curent known most 
+int TR_ConvertNodes(TR_TreeNode *root, TR_TreeType type, int x, int y, int left_child, List node_data)
+{
+    TR_NodeData *d = TR_CreateNodeData();
+
+    d->shared.data = root->shared.data;
+    d->shared.y = y;
+
+    int most_right = x;
+    int ret = x;
+
+    if (root->shared.left != NULL) 
+    {
+        ret = TR_ConvertNodes((TR_TreeNode *) root->shared.left, type, x, y + 1, 1, node_data);
+    }
+
+    ret += 1;
+
+    d->shared.x = ret;
+
+    if (root->shared.right != NULL)
+    {
+        ret = TR_ConvertNodes((TR_TreeNode *) root->shared.right, type, ret, y + 1, 0, node_data);
+    }
+
+    if (root->shared.parent == NULL)
+    {
+        d->shared.parent = -1;
+    }
+    else if(left_child)
+    {
+        d->shared.parent = ret + 1;
+    }
+    else 
+    {
+        d->shared.parent = most_right;
+    }
+
+    list_add(node_data, d);
+
+    return ret;    
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -461,7 +572,7 @@ void TR_RenderDrawSnapshot(SDL_Renderer *rend, TR_Snapshot *snap)
             TR_WINDOW_HEIGHT - TR_HEADER_HEIGHT - TR_WINDOW_PADDING
         };
 
-        TR_RenderDrawTreeData(rend, snap->data, snap->data_size, area);
+        TR_RenderDrawNodeData(rend, snap->node_data, area);
 
         TTF_CloseFont(font);
     }
@@ -474,28 +585,35 @@ void TR_RenderDrawSnapshot(SDL_Renderer *rend, TR_Snapshot *snap)
             TR_WINDOW_HEIGHT - 2 * TR_WINDOW_PADDING
         };
 
-        SDL_RenderDrawRect(rend, &area);
-
-        TR_RenderDrawTreeData(rend, snap->data, snap->data_size, area);
+        TR_RenderDrawNodeData(rend, snap->node_data, area);
     }
-
 }
 
-void TR_RenderDrawTreeData(SDL_Renderer *rend, TR_TreeData *data, int size, SDL_Rect rend_area)
+void TR_RenderDrawNodeData(SDL_Renderer *rend, List node_data, SDL_Rect rend_area)
 {
     //Transform coordinates
     int lowest = 0;
+    int most_right = 0;
 
-    for (int i = 0; i < size; i++)
+    // Projit seznam a najit nejpravejsi a nejnizsi prve a bypocita rozmer stromu
+    void *el;
+    while (list_foreach(node_data, &el))
     {
-        if (data[i].y > lowest)
+        TR_NodeData *data = (TR_NodeData *) el;
+
+        if (data->shared.y > lowest)
         {
-            lowest = data[i].y;
+            lowest = data->shared.y;
+        }
+
+        if (data->shared.x > most_right)
+        {
+            most_right = data->shared.x;
         }
     }
 
     int corner = 1 * TR_UNIT_SIZE - TR_NODE_RADIUS;
-    int width = (size - 1) * TR_UNIT_SIZE + 2 * TR_NODE_RADIUS;
+    int width = (most_right - 1) * TR_UNIT_SIZE + 2 * TR_NODE_RADIUS;
     int height = (lowest - 1) * TR_UNIT_SIZE + 2 * TR_NODE_RADIUS;
 
     //Tree screen area
@@ -533,41 +651,41 @@ void TR_RenderDrawTreeData(SDL_Renderer *rend, TR_TreeData *data, int size, SDL_
     }
 
     //Draw nodes
-    for (int i = 0; i < size; i++)
+    while (list_foreach(node_data, &el))
     {
-        TR_TreeData d = data[i];
+        TR_NodeData *data = (TR_NodeData *) el;
 
-        SDL_Point d_unit_coords = {d.x * TR_UNIT_SIZE, d.y * TR_UNIT_SIZE};
+        SDL_Point data_unit_coords = {data->shared.x * TR_UNIT_SIZE, data->shared.y * TR_UNIT_SIZE};
 
-        SDL_Point vec = Vector(d_unit_coords, ta_center);
+        SDL_Point vec = Vector(data_unit_coords, ta_center);
 
         //We calculate scale vector for every individual node
         SDL_Point sclv = VectorMultiply(vec, 1 - sclf);
 
         //Calculates transformed coordinates
-        SDL_Point d_screen_coords = {
-            d_unit_coords.x + movv.x + sclv.x,
-            d_unit_coords.y + movv.y + sclv.y
+        SDL_Point data_screen_coords = {
+            data_unit_coords.x + movv.x + sclv.x,
+            data_unit_coords.y + movv.y + sclv.y
         };
 
-        TR_RenderDrawNode(rend, d_screen_coords, d.data, sclf);
+        TR_RenderDrawNode(rend, data_screen_coords, data->shared.data, sclf);
 
         //If node isn't root render int's connection
-        if (data[i].parent >= 0)
+        if (data->shared.parent >= 0)
         {
             //We calculate scale vector for every individual node
-            TR_TreeData p = data[data[i].parent - 1];
+            TR_NodeData *parent = list_get_nth(node_data, data->shared.parent);
 
-            SDL_Point p_unit_coords = {p.x * TR_UNIT_SIZE, p.y * TR_UNIT_SIZE};
+            SDL_Point parent_unit_coords = {parent->shared.x * TR_UNIT_SIZE, parent->shared.y * TR_UNIT_SIZE};
 
-            sclv = VectorMultiply(Vector(p_unit_coords, ta_center), 1 - sclf);
+            sclv = VectorMultiply(Vector(parent_unit_coords, ta_center), 1 - sclf);
 
-            SDL_Point p_screen_coords = {
-                p_unit_coords.x + movv.x + sclv.x,
-                p_unit_coords.y + movv.y + sclv.y
+            SDL_Point parent_screen_coords = {
+                parent_unit_coords.x + movv.x + sclv.x,
+                parent_unit_coords.y + movv.y + sclv.y
             };
 
-            TR_RenderDrawConnection(rend, d_screen_coords, p_screen_coords, sclf);
+            TR_RenderDrawConnection(rend, data_screen_coords, parent_screen_coords, sclf);
         }
     }
 }
@@ -728,6 +846,8 @@ SDL_Point Vector(SDL_Point p1, SDL_Point p2)
 
 double VectorAngle(SDL_Point vec)
 {
+    const double PI = 3.14159265358979323846;
+
     if (vec.x >= 0 && vec.y >= 0)
     {
         return atan(vec.y / (double) vec.x);
@@ -744,4 +864,97 @@ double VectorAngle(SDL_Point vec)
     {
         return 2 * PI - atan(-1 * vec.y / (double) vec.x);
     }
+}
+
+/////////////////////////////////////////////////////////////////////
+///////////             FONT LOADING FUNCTIONS
+
+char *TR_GetFontPath(char *family)
+{
+    char *err_fun_name = "TR_GetFontPath";
+
+    //Initialize Fontconfig
+    FcConfig *config = FcInitLoadConfigAndFonts();
+
+    if (config == NULL)
+    {
+        TR_ErrorLog(err_fun_name, "Unable to load Font configuration");
+        goto exit;
+    }
+
+    //Creat Fontpattern
+    FcPattern *pattern = FcPatternCreate();
+
+    if (pattern == NULL)
+    {
+        TR_ErrorLog(err_fun_name, "Unable to create Font patern");
+        goto config_destr;
+    }
+
+    FcPatternAddString(pattern, FC_FAMILY, (FcChar8 *) family);
+    FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_NORMAL);
+    FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ROMAN);
+
+    FcConfigSubstitute(config, pattern, FcMatchPattern);
+    FcDefaultSubstitute(pattern);
+
+
+    //Match font
+    FcResult result;
+    FcPattern *font = FcFontMatch(config, pattern, &result);
+
+    if (font == NULL)
+    {
+        TR_ErrorLog(err_fun_name, "Font not found");
+        goto pattern_destr;
+    }
+
+    char *path;
+
+    FcResult r = FcPatternGetString(font, FC_FILE, 0, (FcChar8 **) &path);
+
+    if(r != FcResultMatch)
+    {
+        TR_ErrorLog(err_fun_name, "Unable to get font file path");
+        goto font_destr;
+    }
+
+    int pathlen = strlen(path);
+
+    char *ret = malloc((pathlen + 1) * sizeof(char));
+
+    strcpy(ret, path); 
+
+    FcPatternDestroy(font);
+    FcPatternDestroy(pattern);
+    FcConfigDestroy(config);
+
+    return ret;
+
+    //In case of error
+    font_destr:
+    FcPatternDestroy(font);
+
+    pattern_destr:
+    FcPatternDestroy(pattern);
+
+    config_destr:
+    FcConfigDestroy(config);
+
+    exit:
+    TR_Quit();
+    exit(EXIT_FAILURE);
+}
+
+void TR_PrintFontPath()
+{
+    printf("%s\n", Data.font);
+}
+
+/////////////////////////////////////////////////////////////////////
+///////////             ERROR HANDELING
+
+void TR_ErrorLog(char *function, const char * msg)
+{
+    printf("[TreeRend Error] - %s: %s\n", function, msg);
 }
