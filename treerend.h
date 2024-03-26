@@ -21,17 +21,17 @@ typedef enum{
 //ever other node structure has to be same exept type of pointers
 typedef struct _TR_SharedNode{
     int data;
-    struct _TR_SharedNode *parent;
     struct _TR_SharedNode *left;
     struct _TR_SharedNode *right;
+    struct _TR_SharedNode *parent;
 }TR_SharedNode;
 
 //Binary search tree node
 typedef struct _TR_BstNode{
     int data;
-    struct _TR_BstNode *parent;
     struct _TR_BstNode *left;
     struct _TR_BstNode *right;
+    struct _TR_BstNode *parent;
 }TR_BstNode;
 
 //Structure representing general node for any type of the tree,

@@ -2,9 +2,9 @@
 
 typedef struct node{
     int data;
-    struct node *parent;
     struct node *left;
     struct node *right;
+    struct node *parent;
 }node;
 
 typedef struct{
