@@ -1,7 +1,5 @@
 /lib
-*.o
-*.so
-*.a
+/obj
 *test*
 dependencies.txt
 .vscode

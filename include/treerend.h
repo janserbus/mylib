@@ -1,24 +1,27 @@
 #pragma once
 
+// Constants for visualization window dimensions and layout
 #define TR_WINDOW_WIDTH 1080
 #define TR_WINDOW_HEIGHT 720
 #define TR_WINDOW_PADDING 50
 #define TR_HEADER_HEIGHT 100
 
+// Constants for node and font sizes
 #define TR_UNIT_SIZE 60
 #define TR_NODE_RADIUS TR_UNIT_SIZE / 2
-
 #define TR_FONT_SIZE_NODE_DATA 22
 #define TR_FONT_SIZE_HEADING 36
 
+// Maximum label size for snapshots
 #define TR_SNAPSHOT_MAX_LABEL_SIZE 40
 
+// Enumeration for types of trees
+// Currently only supports binary search trees
 typedef enum{
     TR_TreeTypeBst
 }TR_TreeType;
 
-//Structure representing nessesary node structure to be rendered,
-//ever other node structure has to be same exept type of pointers
+// Structure representing a shared node structure for all trees
 typedef struct _TR_SharedNode{
     int data;
     struct _TR_SharedNode *left;
@@ -26,7 +29,7 @@ typedef struct _TR_SharedNode{
     struct _TR_SharedNode *parent;
 }TR_SharedNode;
 
-//Binary search tree node
+// Binary search tree node structure
 typedef struct _TR_BstNode{
     int data;
     struct _TR_BstNode *left;
@@ -34,35 +37,43 @@ typedef struct _TR_BstNode{
     struct _TR_BstNode *parent;
 }TR_BstNode;
 
-//Structure representing general node for any type of the tree,
-//operetions that are shared for every tree use shared member to acess it's members
+// Union representing a general node for any type of tree
 typedef union{
     TR_SharedNode shared;
     TR_BstNode bst;
 }TR_TreeNode;
 
-//Structure representig tree of given type
+// Structure representing a tree of a given type
 typedef struct{
     TR_TreeType type;
     TR_TreeNode *root;
 }TR_Tree;
 
-void TR_Init();
-void TR_Quit();
+// Function prototypes for library initialization and cleanup
+void TR_Init(); // Initialize the library
+void TR_Quit(); // Clean up resources
 
-//Lib Interface
+// Library Interface
 
+// Function for formatting a raw tree into the library's tree structure
 TR_Tree *TR_FormatTree(void *tree, TR_TreeType type);
 
-//Presenting functions
+// Presentation functions
 
+// Render a tree visualization
 void TR_RenderTree(void *tree, TR_TreeType type, char *label);
+// Render a formatted tree
 void TR_RenderTreeFormated(TR_Tree *tree, char * label);
+// Take a snapshot of the tree visualization
 void TR_TakeSnapshot(void *tree, TR_TreeType type, char *label);
+// Take a snapshot of a formatted tree
 void TR_TakeSnapshotFormated(TR_Tree *tree, char *label);
+// Present the visualization
 void TR_Present();
 
-//Info functions
+// Information functions
 
+// Print snapshots of the tree
 void TR_PrintSnapshots();
+// Print the font path used by the library
 void TR_PrintFontPath();

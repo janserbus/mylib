@@ -116,7 +116,7 @@ List list()
 
 void list_(List list, void (*free_data)())
 {
-    assert(list_is_valid);
+    assert(list_is_valid(list));
 
     lnode *temp = NULL;
 
