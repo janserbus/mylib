@@ -40,3 +40,25 @@ sudo make install
 ```
 
 Now, your libraries are ready for use!
+
+## Uninstalling the Libraries
+
+To uninstall the mylib files, run the following command:
+
+```bash
+sudo make uninstall
+```
+
+After uninstalling the library files, navigate up the directory and delete the cloned repository:
+
+```bash
+cd ..
+rm -rf mylib
+```
+
+To remove all the dependencies that were installed execute the following commands:
+
+```bash
+sudo apt remove --purge libsdl2-2.0-0 libsdl2-dev libsdl2-ttf-2.0-0 libsdl2-ttf-dev libsdl2-gfx-1.0-0 libsdl2-gfx-dev libfontconfig1 libfontconfig1-dev
+sudo apt autoremove --purge
+```

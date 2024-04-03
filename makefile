@@ -58,7 +58,6 @@ clean:
 
 install: all
 	sudo ./$(SCRIPT_DIR)/$@.sh
-	make clean
 
 uninstall:
 	sudo ./$(SCRIPT_DIR)/$@.sh
