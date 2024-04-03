@@ -13,12 +13,12 @@ RENDLIB_NAME := libtreerend.so
 REND_DIR := treerend
 REND_SRC := $(wildcard $(REND_DIR)/*.c)
 REND_OBJ := $(patsubst $(REND_DIR)/%.c,$(OBJ_DIR)/%.o,$(REND_SRC))
-REND_LINKS := -lSDL2 -lSDL2_ttf -lfontconfig -ldstructs
+REND_LINKS := -lSDL2 -lSDL2_ttf -lSDL2_gfx -lfontconfig -ldstructs
 
 .PHONY: test
 
 test: test.c
-	$(CC) $(CFLAGS) -g3 -o $@ $^ -I$(INC_DIR) -L$(LIB_DIR) -ldstructs -ltreerend
+	$(CC) $(CFLAGS) -g3 -o $@ $^ -I$(INC_DIR) -L./$(LIB_DIR) -ldstructs -ltreerend -Wl,-rpath=$(LIB_DIR)
 
 #LIBRARY COMPILATION
 
@@ -44,7 +44,7 @@ $(OBJ_DIR)/%.o: $(DATA_DIR)/%.c $(HEADERS)
 #COMPILE DSTRUCTS OBJECT FILES
 $(OBJ_DIR)/%.o: $(REND_DIR)/%.c $(HEADERS)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -fPIC -I$(INC_DIR) -c $< -o $@ 
+	$(CC) $(CFLAGS) -fPIC -I$(INC_DIR) -c $< -o $@
 
 .PHONY: clean
 

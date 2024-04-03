@@ -17,6 +17,7 @@ Next, you need to install all the dependencies:
 
 - `libsdl2-2.0-0` and `libsdl2-dev`
 - `libsdl2-ttf-2.0-0` and `libsdl2-ttf-dev`
+- `libsdl2-gfx-1.0-0` and `libsdl2-gfx-dev`
 - `libfontconfig1` and `libfontconfig1-dev`
 
 Update your packages:
@@ -28,7 +29,7 @@ sudo apt update
 Then, install all the dependencies:
 
 ```bash
-sudo apt install libsdl2-2.0-0 libsdl2-dev libsdl2-ttf-2.0-0 libsdl2-ttf-dev libfontconfig1 libfontconfig1-dev
+sudo apt install libsdl2-2.0-0 libsdl2-dev libsdl2-ttf-2.0-0 libsdl2-ttf-dev libsdl2-gfx-1.0-0 libsdl2-gfx-dev libfontconfig1 libfontconfig1-dev
 ```
 
 Once you have successfully installed all the dependencies, navigate to the cloned directory and run the make script to compile and install the libraries:

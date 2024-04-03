@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL2_gfxPrimitives.h>
 #include <fontconfig/fontconfig.h>
 
 #include <list.h>
@@ -66,7 +67,6 @@ void TR_RenderDrawSnapshot(SDL_Renderer *rend, TR_Snapshot *snap);
 void TR_RenderDrawNodeData(SDL_Renderer *rend, List node_data, SDL_Rect rend_area);
 void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float sclf);
 void TR_RenderDrawConnection(SDL_Renderer *rend, SDL_Point c1, SDL_Point c2, float sclf);
-void TR_RenderDrawCircle(SDL_Renderer *rend, SDL_Point center, int radius);
 
 //ANALYTIC GEOMETRY
 SDL_Point RectCenter(SDL_Rect rect);
@@ -738,7 +738,7 @@ void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float scl
 
     SDL_RenderCopy(rend, tex, NULL, &num_rect);
 
-    TR_RenderDrawCircle(rend, coords, TR_NODE_RADIUS * sclf);
+    aacircleColor(rend, coords.x, coords.y, TR_NODE_RADIUS * sclf, *((Uint32 *) &Data.draw_color.r));
 
     TTF_CloseFont(font);
     SDL_DestroyTexture(tex);
@@ -768,47 +768,7 @@ void TR_RenderDrawConnection(SDL_Renderer *rend, SDL_Point c1, SDL_Point c2, flo
     };
     
     //Connect two intersecting points
-    SDL_RenderDrawLine(rend, p1.x, p1.y, p2.x, p2.y);
-}
-
-void TR_RenderDrawCircle(SDL_Renderer *rend, SDL_Point center, int radius)
-{
-    //Implementing midpoint algorithm
-
-    int diameter = 2 * radius;
-
-    int x = radius - 1;
-    int y = 0;
-    int tx = 1;
-    int ty = 1;
-    int error = tx - diameter;
-
-    while (x >= y)
-    {        
-        //sEach of the following renders an octant of the circle
-        SDL_RenderDrawPoint(rend, center.x + x, center.y - y);
-        SDL_RenderDrawPoint(rend, center.x + x, center.y + y);
-        SDL_RenderDrawPoint(rend, center.x - x, center.y - y);
-        SDL_RenderDrawPoint(rend, center.x - x, center.y + y);
-        SDL_RenderDrawPoint(rend, center.x + y, center.y - x);
-        SDL_RenderDrawPoint(rend, center.x + y, center.y + x);
-        SDL_RenderDrawPoint(rend, center.x - y, center.y - x);
-        SDL_RenderDrawPoint(rend, center.x - y, center.y + x);
-
-        if (error <= 0)
-        {
-            y += 1;
-            error += ty;
-            ty += 2;
-        }
-
-        if (error > 0)
-        {
-            x -= 1;
-            tx += 2;
-            error += (tx - diameter);
-        }
-    }     
+    aalineColor(rend, p1.x, p1.y, p2.x, p2.y, *((Uint32 *) &Data.draw_color.r));
 }
 
 /////////////////////////////////////////////////////////////////////
