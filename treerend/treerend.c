@@ -21,7 +21,7 @@ typedef struct{
 }TR_Config;
 
 //Structure representig shared portion of every tree data 
-//(meaning regardles of the data type, every data will have this exact structure)
+//(meaning regardles of the data type, every data will share this exact structure)
 typedef struct{
     int data;
     int x;
@@ -36,10 +36,19 @@ typedef struct{
     int parent;
 }TR_BstData;
 
+typedef struct{
+    int data;
+    int x;
+    int y;
+    int parent;
+    int bf;
+}TR_AvlData;
+
 //Shared member is used to do operations that are shared among all the data types
 typedef union{
     TR_SharedData shared;
     TR_BstData bst;
+    TR_AvlData avl;
 }TR_NodeData;
 
 //Dual structure to TR_Tree representig tree ready to render
@@ -64,8 +73,9 @@ int TR_ConvertNodes(TR_TreeNode *root, TR_TreeType type, int x, int y, int left_
 void TR_RenderNextSnapshot(SDL_Renderer *rend);
 void TR_RenderPrevSnapshot(SDL_Renderer *rend);
 void TR_RenderDrawSnapshot(SDL_Renderer *rend, TR_Snapshot *snap);
-void TR_RenderDrawNodeData(SDL_Renderer *rend, List node_data, SDL_Rect rend_area);
-void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float sclf);
+void TR_RenderDrawLabel(SDL_Renderer *rend, char *label);
+void TR_RenderDrawNodeData(SDL_Renderer *rend, TR_TreeType type, List node_data, SDL_Rect rend_area);
+void TR_RenderDrawNode(SDL_Renderer *rend, TR_TreeType type, TR_NodeData *node_data, SDL_Point coords, float sclf);
 void TR_RenderDrawConnection(SDL_Renderer *rend, SDL_Point c1, SDL_Point c2, float sclf);
 
 //ANALYTIC GEOMETRY
@@ -408,28 +418,44 @@ void TR_PrintSnapshot(TR_Snapshot *snap)
         printf("\n%s\n-------------\n", snap->label);
     }
 
+    int i = 1;
+
     void *el;
-        switch (snap->type)
-        {
-            case TR_TreeTypeBst:
-                int i = 1;
-                while (list_foreach(snap->node_data, &el))
-                {
-                    TR_NodeData *data = (TR_NodeData *) el;
+    switch (snap->type)
+    {
+        case TR_TreeTypeBst:
+            while (list_foreach(snap->node_data, &el))
+            {
+                TR_NodeData *data = (TR_NodeData *) el;
 
-                    printf("element: %i\n", i);
-                    printf("  data: %i\n", data->bst.data);
-                    printf("     x: %i\n", data->bst.x);
-                    printf("     y: %i\n", data->bst.y);
-                    printf("parent: %i\n\n", data->bst.parent);
-                    i++;
-                }
-                break;
+                printf("element: %i\n", i);
+                printf("  data: %i\n", data->bst.data);
+                printf("     x: %i\n", data->bst.x);
+                printf("     y: %i\n", data->bst.y);
+                printf("parent: %i\n\n", data->bst.parent);
+                i++;
+            }
+            break;
 
-            default:
-                printf("Unknown type\n\n");
-                break;
-        }
+        case TR_TreeTypeAvl:
+            while (list_foreach(snap->node_data, &el))
+            {
+                TR_NodeData *data = (TR_NodeData *) el;
+
+                printf("element: %i\n", i);
+                printf("  data: %i\n", data->avl.data);
+                printf("     x: %i\n", data->avl.x);
+                printf("     y: %i\n", data->avl.y);
+                printf("parent: %i\n", data->avl.parent);
+                printf("    bf: %i\n\n", data->avl.bf);
+                i++;
+            }
+            break;
+
+        default:
+            printf("Unknown type\n\n");
+            break;
+    }
 }
 
 void TR_PrintSnapshots()
@@ -511,6 +537,11 @@ int TR_ConvertNodes(TR_TreeNode *root, TR_TreeType type, int x, int y, int left_
         d->shared.parent = most_right;
     }
 
+    if (type == TR_TreeTypeAvl)
+    {
+        d->avl.bf = root->avl.bf;
+    }
+
     list_add(node_data, d);
 
     return ret;    
@@ -521,81 +552,94 @@ int TR_ConvertNodes(TR_TreeNode *root, TR_TreeType type, int x, int y, int left_
 
 void TR_RenderDrawSnapshot(SDL_Renderer *rend, TR_Snapshot *snap)
 {
+    TR_RenderDrawLabel(rend, snap->label);
+
+    SDL_Rect area;
+
     if (snap->label != NULL)
     {
-        TTF_Font *font = TTF_OpenFont(Data.font, TR_FONT_SIZE_HEADING);
-
-        if (font == NULL)
-        {
-            perror(TTF_GetError());
-            TR_Quit();
-            abort();
-        }
-
-        SDL_Surface *label = TTF_RenderText_Blended(font, snap->label, Data.draw_color);
-
-        if (label == NULL)
-        {
-            perror(SDL_GetError());
-            TTF_CloseFont(font);
-            TR_Quit();
-            abort();
-        }
-
-        SDL_Texture *tex = SDL_CreateTextureFromSurface(rend, label);
-
-        if (tex == NULL)
-        {
-            perror(SDL_GetError());
-            SDL_FreeSurface(label);
-            TTF_CloseFont(font);
-            TR_Quit();
-            abort();
-        }
-
-        SDL_Rect rect = {
-            TR_WINDOW_WIDTH / 2 - label->w / 2,
-            TR_HEADER_HEIGHT / 2 - label->h / 2,
-            label->w,
-            label->h
-        };
-
-        SDL_RenderCopy(rend, tex, NULL, &rect);
-
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(label);
-
-        SDL_Rect area ={
-            TR_WINDOW_PADDING,
-            TR_HEADER_HEIGHT,
-            TR_WINDOW_WIDTH - 2 * TR_WINDOW_PADDING,
-            TR_WINDOW_HEIGHT - TR_HEADER_HEIGHT - TR_WINDOW_PADDING
-        };
-
-        TR_RenderDrawNodeData(rend, snap->node_data, area);
-
-        TTF_CloseFont(font);
+        area.x = TR_WINDOW_PADDING;
+        area.y = TR_HEADER_HEIGHT;
+        area.w = TR_WINDOW_WIDTH - 2 * TR_WINDOW_PADDING;
+        area.h = TR_WINDOW_HEIGHT - TR_HEADER_HEIGHT - TR_WINDOW_PADDING;
     }
     else
     {
-        SDL_Rect area ={
-            TR_WINDOW_PADDING,
-            TR_WINDOW_PADDING,
-            TR_WINDOW_WIDTH - 2 * TR_WINDOW_PADDING,
-            TR_WINDOW_HEIGHT - 2 * TR_WINDOW_PADDING
-        };
-
-        TR_RenderDrawNodeData(rend, snap->node_data, area);
+        area.x = TR_WINDOW_PADDING;
+        area.y = TR_WINDOW_PADDING;
+        area.w = TR_WINDOW_WIDTH - 2 * TR_WINDOW_PADDING;
+        area.h = TR_WINDOW_HEIGHT - 2 * TR_WINDOW_PADDING;
     }
+
+    TR_RenderDrawNodeData(rend, snap->type, snap->node_data, area);
 }
 
-void TR_RenderDrawNodeData(SDL_Renderer *rend, List node_data, SDL_Rect rend_area)
+void TR_RenderDrawLabel(SDL_Renderer *rend, char *label)
+{
+    if (label == NULL)
+    {
+        return;
+    }
+
+    char *err_fun_name = "TR_RenderDrawLabel";
+    
+    TTF_Font *font = TTF_OpenFont(Data.font, TR_FONT_SIZE_HEADING);
+
+    if (font == NULL)
+    {
+        TR_ErrorLog(err_fun_name, TTF_GetError());
+        goto exit;
+    }
+
+    SDL_Surface *surf = TTF_RenderText_Blended(font, label, Data.draw_color);
+
+    if (surf == NULL)
+    {
+        TR_ErrorLog(err_fun_name, SDL_GetError());
+        goto destr_font;
+    }
+
+    SDL_Texture *tex = SDL_CreateTextureFromSurface(rend, surf);
+
+    if (tex == NULL)
+    {
+        TR_ErrorLog(err_fun_name, SDL_GetError());
+        goto destr_surface;
+    }
+
+    SDL_Rect rect = {
+        TR_WINDOW_WIDTH / 2 - surf->w / 2,
+        TR_HEADER_HEIGHT / 2 - surf->h / 2,
+        surf->w,
+        surf->h
+    };
+
+    SDL_RenderCopy(rend, tex, NULL, &rect);
+
+    SDL_DestroyTexture(tex);
+    SDL_FreeSurface(surf);
+
+    TTF_CloseFont(font);
+
+    return;
+
+    destr_surface:
+    SDL_FreeSurface(surf);
+
+    destr_font:
+    TTF_CloseFont(font);
+
+    exit:
+    TR_Quit();
+    exit(EXIT_FAILURE);
+}
+
+void TR_RenderDrawNodeData(SDL_Renderer *rend, TR_TreeType type, List node_data, SDL_Rect rend_area)
 {
     //Transform coordinates
     int lowest = 0;
     int most_right = 0;
 
-    // Projit seznam a najit nejpravejsi a nejnizsi prve a bypocita rozmer stromu
     void *el;
     while (list_foreach(node_data, &el))
     {
@@ -668,7 +712,7 @@ void TR_RenderDrawNodeData(SDL_Renderer *rend, List node_data, SDL_Rect rend_are
             data_unit_coords.y + movv.y + sclv.y
         };
 
-        TR_RenderDrawNode(rend, data_screen_coords, data->shared.data, sclf);
+        TR_RenderDrawNode(rend, type, data, data_screen_coords, sclf);
 
         //If node isn't root render int's connection
         if (data->shared.parent >= 0)
@@ -690,7 +734,7 @@ void TR_RenderDrawNodeData(SDL_Renderer *rend, List node_data, SDL_Rect rend_are
     }
 }
 
-void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float sclf)
+void TR_RenderDrawNode(SDL_Renderer *rend, TR_TreeType type, TR_NodeData *node_data, SDL_Point coords, float sclf)
 {
     TTF_Font *font = TTF_OpenFont(Data.font, TR_FONT_SIZE_NODE_DATA * sclf);
 
@@ -701,9 +745,9 @@ void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float scl
         abort();
     }
 
-    char *buffer = malloc(TR_SNAPSHOT_MAX_LABEL_SIZE * sizeof(char));
+    char *buffer = malloc(20 * sizeof(char));
 
-    sprintf(buffer, "%i", data);
+    sprintf(buffer, "%i", node_data->shared.data);
 
     SDL_Surface *num = TTF_RenderText_Blended(font, buffer, Data.draw_color);
 
@@ -715,8 +759,6 @@ void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float scl
         TR_Quit();
         abort();
     }
-
-    free(buffer);
 
     SDL_Texture *tex = SDL_CreateTextureFromSurface(rend, num);
 
@@ -740,9 +782,35 @@ void TR_RenderDrawNode(SDL_Renderer *rend, SDL_Point coords, int data, float scl
 
     aacircleColor(rend, coords.x, coords.y, TR_NODE_RADIUS * sclf, *((Uint32 *) &Data.draw_color.r));
 
-    TTF_CloseFont(font);
+    // If avl render bf
+    if (type == TR_TreeTypeAvl)
+    {
+        TTF_Font *small = TTF_OpenFont(Data.font, TR_FONT_SIZE_NODE_DATA * 0.6 * sclf);
+
+        sprintf(buffer, "bf: %i", node_data->avl.bf);
+
+        SDL_Surface *bf = TTF_RenderText_Blended(small, buffer, Data.draw_color);
+        
+        SDL_Texture *bf_tex = SDL_CreateTextureFromSurface(rend, bf);
+
+        SDL_Rect bf_rect = {
+            coords.x - bf->w / 2,
+            coords.y - TR_NODE_RADIUS * sclf - bf->h,
+            bf->w,
+            bf->h        
+        };
+
+        SDL_RenderCopy(rend, bf_tex, NULL, &bf_rect);
+
+        SDL_DestroyTexture(bf_tex);
+        SDL_FreeSurface(bf);    
+        TTF_CloseFont(small);
+    }
+
+    free(buffer);
     SDL_DestroyTexture(tex);
     SDL_FreeSurface(num);
+    TTF_CloseFont(font);
 }
 
 void TR_RenderDrawConnection(SDL_Renderer *rend, SDL_Point c1, SDL_Point c2, float sclf)

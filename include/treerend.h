@@ -18,7 +18,8 @@
 // Enumeration for types of trees
 // Currently only supports binary search trees
 typedef enum{
-    TR_TreeTypeBst
+    TR_TreeTypeBst,
+    TR_TreeTypeAvl
 }TR_TreeType;
 
 // Structure representing a shared node structure for all trees
@@ -37,10 +38,20 @@ typedef struct _TR_BstNode{
     struct _TR_BstNode *parent;
 }TR_BstNode;
 
+// Binary search AVL tree node structure
+typedef struct _TR_AvlNode{
+    int data;
+    struct _TR_AvlNode *left;
+    struct _TR_AvlNode *right;
+    struct _TR_AvlNode *parent;
+    int bf;
+}TR_AvlNode;
+
 // Union representing a general node for any type of tree
 typedef union{
     TR_SharedNode shared;
     TR_BstNode bst;
+    TR_AvlNode avl;
 }TR_TreeNode;
 
 // Structure representing a tree of a given type
