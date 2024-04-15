@@ -298,7 +298,9 @@ void TR_Present()
 
                 break;                
             }
-        }        
+        }
+        //a little break for the cpu...
+        SDL_Delay(10);
     }
 
     SDL_DestroyRenderer(renderer);
